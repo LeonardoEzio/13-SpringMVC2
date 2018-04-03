@@ -1,5 +1,11 @@
 package leonardo.ezio.springmvc.controller;
 
+import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import org.csource.common.MyException;
+import org.csource.fastdfs.ClientGlobal;
+import org.csource.fastdfs.StorageClient;
+import org.csource.fastdfs.TrackerClient;
+import org.csource.fastdfs.TrackerServer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,27 +16,33 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 import javax.servlet.ServletContext;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import java.io.*;
 import java.rmi.server.ServerCloneException;
 
 @Controller
 public class FileUploadController {
 
-    @Autowired
-    private ServletContext servletContext;
-
     public FileUploadController() {
         System.out.println("FileUploadController ....init ");
     }
 
-    @ResponseBody
+    @Autowired
+    private ServletContext servletContext;
+
+    @Autowired
+    private  StorageClient storageClient;
+
+    /*@ResponseBody
     @PostMapping(value = "/fileUpload")
     public String fileUpload(
             @RequestParam("name") String name,
-            @RequestParam("file") MultipartFile file){
+            @RequestParam("file") MultipartFile file) throws Exception{
         if (!file.isEmpty()) {
+            ClientGlobal.init("src/fastdfs_conf.conf");
+            TrackerClient client = new TrackerClient();
+            TrackerServer tracker = client.getConnection();
+            StorageClient storageClient = new StorageClient(tracker,null);
+            storageClient.upload_file()
             String path = this.servletContext.getRealPath("/upload");
             String filename = file.getOriginalFilename();
             System.out.println("OriginalFilename :"+filename);
@@ -58,12 +70,56 @@ public class FileUploadController {
             return "FileUpload Successful";
         }
         return "FileUpload Fail";
-    }
+    }*/
 
     @ResponseBody
-    @RequestMapping("/test")
-    public String test(){
-        System.out.println("test....");
-        return "Test  Successful";
+    @PostMapping(value = "/fileUpload")
+    public String fileUpload(
+            /*@RequestParam("name") String name,*/
+            @RequestParam("file") MultipartFile [] files) throws Exception{
+            for (MultipartFile file : files){
+                if (!file.isEmpty()) {
+                    String filename = file.getOriginalFilename();
+                    String fileType = filename.substring(filename.lastIndexOf(".")+1);
+                    System.out.println("fileType"+fileType);
+                    String[] strings = storageClient.upload_file(file.getBytes(), fileType, null);
+                    StringBuffer storagePath = new StringBuffer();
+                    for (String s : strings){
+                        storagePath.append(s);
+                    }
+                    String fileLocation = storagePath.toString().substring(6);
+                    String storageGroup = storagePath.substring(0,6);
+                    System.out.println("fileAccessLocation : "+fileLocation);
+                    System.out.println("storageGroup : "+storageGroup);
+                    System.out.println(storagePath.toString());
+                }
+            }
+        return "FileUpload Fail";
+    }
+
+    @RequestMapping("/download")
+    @ResponseBody
+    public String fileDownLoad(String group,String filename){
+        System.out.println("downLoad............");
+        System.out.println("group : "+group);
+        System.out.println("filename ： "+filename);
+        try {
+            byte[] bytes = storageClient.download_file(group,filename);
+            System.out.println(bytes == null);
+            ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+            int i = 0;
+            FileOutputStream os = new FileOutputStream("D://1.jpg");
+            while ((i = bais.read())!=-1){
+                os.write(i);
+            }
+            os.flush();
+            os.close();
+            bais.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (MyException e) {
+            e.printStackTrace();
+        }
+        return "downLoadsuccessful";
     }
 }
